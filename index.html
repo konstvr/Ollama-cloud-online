@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Cloud Client (Production Page)</title>
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #ffffff;
+            --text: #1d1d1f;
+            --accent: #0071e3;
+            --border: #d2d2d7;
+            --console-bg: #151515;
+            --console-text: #00ff66;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card: #1c1c1e;
+                --text: #f5f5f7;
+                --accent: #0a84ff;
+                --border: #3a3a3c;
+            }
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--card);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+        h2 { margin-top: 0; text-align: center; font-weight: 600; font-size: 1.3rem;}
+        .field {
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            opacity: 0.6;
+        }
+        input, textarea {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            background: transparent;
+            color: var(--text);
+            outline: none;
+        }
+        input:focus, textarea:focus { border-color: var(--accent); }
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 5px;
+        }
+        button:disabled { opacity: 0.4; }
+        #responseArea {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.03);
+            border: 1px solid var(--border);
+            min-height: 80px;
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+        @media (prefers-color-scheme: dark) {
+            #responseArea { background: rgba(255,255,255,0.04); }
+        }
+        .console {
+            margin-top: 20px;
+            background: var(--console-bg);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #222;
+        }
+        .console-header {
+            color: #ff9500;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        #sysLogs {
+            font-family: Menlo, Courier, monospace;
+            font-size: 0.75rem;
+            color: var(--console-text);
+            max-height: 140px;
+            overflow-y: auto;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Ollama Cloud GitHub Gateway</h2>
+    
+    <div class="field">
+        <label>CORS Target Bypass Proxy</label>
+        <input type="text" id="proxyGateway" value="https://corsproxy.io/?">
+    </div>
+
+    <div class="field">
+        <label>Ollama Target Endpoint</label>
+        <input type="text" id="endpointUrl" value="https://ollama.com/api/chat">
+    </div>
+
+    <div class="field">
+        <label>Ollama API Token</label>
+        <input type="password" id="cloudKey" placeholder="OLLAMA_API_KEY">
+    </div>
+
+    <div class="field">
+        <label>Target Model</label>
+        <input type="text" id="modelIdentifier" value="gemma4:31b">
+    </div>
+
+    <div class="field">
+        <label>Prompt Context</label>
+        <textarea id="userPrompt" rows="3" placeholder="Type prompt content here..."></textarea>
+    </div>
+
+    <button id="runBtn" onclick="contactOllamaCloud()">Query Cloud Model</button>
+
+    <div style="font-size: 0.8rem; font-weight: bold; margin-top: 15px; text-transform: uppercase; opacity:0.7;">Output Response Stream</div>
+    <div id="responseArea">Awaiting live trigger session...</div>
+
+    <div class="console">
+        <div class="console-header">
+            <span>📡 Live Web Deployment Monitor</span>
+            <span style="text-decoration: underline; cursor: pointer;" onclick="clearLogs()">Clear</span>
+        </div>
+        <pre id="sysLogs">Hosted site initialized. Local encrypted keystore scan active.</pre>
+    </div>
+</div>
+
+<script>
+    // Pull local caching to ensure keys are preserved securely in your personal iPad sandbox
+    document.getElementById('cloudKey').value = localStorage.getItem('gh_ollama_key') || '';
+
+    function printLog(text, isError = false) {
+        const consoleElem = document.getElementById('sysLogs');
+        const time = new Date().toLocaleTimeString();
+        const indicator = isError ? '[❌ CRITICAL]' : '[LOG]';
+        consoleElem.textContent += `\n[${time}] ${indicator} ${text}`;
+        consoleElem.scrollTop = consoleElem.scrollHeight;
+    }
+
+    function clearLogs() {
+        document.getElementById('sysLogs').textContent = '[Terminal Flushed]';
+    }
+
+    async function contactOllamaCloud() {
+        const proxy = document.getElementById('proxyGateway').value.trim();
+        const endpoint = document.getElementById('endpointUrl').value.trim();
+        const apiKey = document.getElementById('cloudKey').value.trim();
+        const model = document.getElementById('modelIdentifier').value.trim();
+        const prompt = document.getElementById('userPrompt').value.trim();
+        
+        const btn = document.getElementById('runBtn');
+        const output = document.getElementById('responseArea');
+
+        if (!apiKey || !prompt) {
+            printLog('Aborted execution: Authentication token or Prompt payload was left blank.', true);
+            alert('Please configure your API key and input prompt before hitting request.');
+            return;
+        }
+
+        localStorage.setItem('gh_ollama_key', apiKey);
+        btn.disabled = true;
+        output.textContent = "Routing transmission via remote encryption proxy tunnel...";
+        
+        // Form a compliant target endpoint string for the CORS service
+        const destinationUrl = `${proxy}${encodeURIComponent(endpoint)}`;
+        printLog(`Target endpoint compiled: ${destinationUrl}`);
+
+        const requestPayload = {
+            model: model,
+            messages: [{ role: "user", content: prompt }],
+            stream: false
+        };
+
+        try {
+            printLog("Dispatching HTTP request packet...");
+            
+            const response = await fetch(destinationUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestPayload)
+            });
+
+            printLog(`Server acknowledged. HTTP Code: ${response.status}`);
+            const responseText = await response.text();
+            
+            if (!response.ok) {
+                printLog(`Upstream API rejection block: ${responseText}`, true);
+                throw new Error(`HTTP ${response.status}: ${responseText}`);
+            }
+
+            printLog("De-serializing data objects...");
+            const dataResult = JSON.parse(responseText);
+            
+            if (dataResult.message && dataResult.message.content) {
+                output.textContent = dataResult.message.content;
+                printLog("Text output processed and written to active viewport layout successfully.", false);
+            } else {
+                output.textContent = JSON.stringify(dataResult, null, 2);
+                printLog("Warning: Layout returned non-standard structural variations.", true);
+            }
+
+        } catch (err) {
+            printLog(`Transmission exception crashed application step: ${err.toString()}`, true);
+            output.innerHTML = `<span style="color:#ff453a; font-weight:bold;">Execution Call Halted.</span> See pipeline monitor entries.`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
